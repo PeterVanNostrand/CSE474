@@ -1,17 +1,88 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import util_mnist_reader
 
+def normalize(matrix):
+    '''
+    scales the values in a matrix to be in the range [0,1]
+    ## Parameters
+        - matrix: the matrix to be normalized
+    ## Returns
+        - out: the normalized matrix
+    '''
+    col_max = matrix.max(axis=0)
+    col_min = matrix.min(axis=0)
+    return (matrix - col_min)/(col_max-col_min)
+
 def sigmoid(z):
+    z = normalize(z)
     return 1 / (1 + np.exp(-z))
 
 def softmax(z): # computes the softmax of set of activations exp(ak) / sum( exp(aj) )
+    z = normalize(z)
     exp_z = np.exp(z)
     sum_exp_z = np.sum(exp_z, axis=0) # assumes neurons for one sample are in column
     return exp_z / sum_exp_z
 
-def loss(a, y):
-    cost = np.multiply(y, np.log(a)) # ylog(a)
-    return -np.mean(cost, axis=1) # determine the loss for each of the 10 output neurons
+def cost(a, y):
+    loss = np.multiply(y, np.log(a)) # ylog(a)
+    return -np.mean(loss, axis=1) # determine the loss for each of the 10 output neurons
+
+class layer_input:
+    def __init__(self, x_train):
+        # Layer 0: Input Layer - Activations are pixel values
+        self.n = x_train.shape[1] # number of neurons in 0th layer
+        self.a = np.transpose(x_train) # Every column is one sample, every row is a pixel within that sample
+        self.a = self.a / 255 # normalizing inputs from [0-255] to [0-1] for simplicity
+
+
+class layer_hidden:  # Layer 1: Hidden Layer - Fully connected
+    def __init__(self, num_nodes, prev_layer):
+        # store reference to previous layer
+        self.prev_layer = prev_layer
+        # Number of neurons in 1st layer
+        self.n = num_nodes
+        # create a 392 row x 784 col random matrix of weights
+        self.w = np.random.randn(self.n, self.prev_layer.n)*0.01
+        # create a n row x 1 col random matrix of biases (1 bias/neuron)
+        self.b = np.random.randn(self.n, 1)*0.01
+        
+    def forward(self):
+        # z = wa0 + b
+        # a = sigmoid(z)
+
+        # resulting n x ns (each col the output neurons for a sample)
+        self.z = np.dot(self.w, self.prev_layer.a) + self.b
+        # computes final activation of every neuron in layer 1 same dims as z
+        self.a = sigmoid(self.z)
+
+    def backward(self, y, next_layer, lr):
+        # compute gradient descient for hidden layer
+        del_a = np.dot((next_layer.a - y).T, next_layer.w).T
+        del_z = np.multiply(del_a, np.multiply(self.a, (1-self.a)))
+        del_w = np.dot(del_z, self.prev_layer.a.T)
+        self.w += lr * del_w
+
+
+class layer_output: # Layer 2: Output Layer - Softmax
+    def __init__(self, num_nodes, prev_layer):
+        self.prev_layer = prev_layer
+        self.n = num_nodes # 10 output neurons, one per class
+        self.w = np.random.randn(self.n, self.prev_layer.n)*0.01
+        self.b = np.random.randn(self.n, 1)*0.01
+        
+    def forward(self):
+        # z = 2a1 + b
+        # a = softmax(z)
+        self.z = np.dot(self.w, self.prev_layer.a) + self.b
+        self.a = softmax(self.z)
+
+    def backward(self, y, lr):
+        # compute gradient descent for output layer
+        del_z = self.a - y
+        del_w = np.dot(del_z, self.prev_layer.a.T)
+        self.w += lr * del_w
+
 
 if __name__ == '__main__':
     print("Part 1: Neural Network")
@@ -31,48 +102,35 @@ if __name__ == '__main__':
     y = np.zeros((10, ns)) # each column represents the output neurons for one sample
     for i in range(0, ns): # set desired output to 1 for correct class, 0 for rest
         y[y_train[i]-1][i] = 1
+  
+    l0 = layer_input(x_train)
+    l1 = layer_hidden(392, l0)
+    l2 = layer_output(10, l1)
 
-    # Layer 0: Input Layer - Activations are pixel values
-    n0 = x_train.shape[1] # number of neurons in 0th layer
-    a0 = np.transpose(x_train) # Every column is one sample, every row is a pixel within that sample
-    a0 = a0 / 255 # normalizingg inputs from [0-255] to [0-1] for simplicity
-    
-    # Layer 1: Hidden Layer - Fully connected
-    # z1 = w1a0 + b1
-    # a1 = sigmoid(z1)
-    n1 = 392 # Number of neurons in 1st layer
-    w1 = np.random.randn(n1, n0)*0.01 # create a 392 row x 784 col random matrix of weights
-    b1 = np.random.randn(n1, 1)*0.01 # create a n1 row x 1 col random matrix of biases (1 bias per neuron)
-    z1 = np.dot(w1, a0) + b1 # resulting n1 x ns (each col is the output neurons for a different sample)
-    a1 = sigmoid(z1) # computes final activation of every neuron in layer 1 same dims as z1    
+    loss = []
 
-    # Layer 2: Output Layer - Softmax
-    # z2 = w2a1 + b2
-    # a2 = softmax(z2)
-    n2 = 10 # 10 output neurons, one per class
-    w2 = np.random.randn(n2, n1)*0.01
-    b2 = np.random.randn(n2, 1)*0.01
-    z2 = np.dot(w2, a1) + b2
-    a2 = softmax(z2)
-    
-    # compute gradient descent for output layer
-    del_z2 = a2 - y
-    del_w2 = np.dot(del_z2, a1.T)
+    for i in range(0, 10):
+        # forwared propagate
+        l1.forward()
+        l2.forward()
 
-    # compute gradient descient for hidden layer
-    del_a1 = np.dot((a2 - y).T, w2).T
-    del_z1 = np.multiply(del_a1, np.multiply(a1, (1-a1)))
-    del_w1 = np.dot(del_z1, a0.T)
+        # compute cost
+        cost_val = np.sum(cost(l2.a, y))
+        loss.append(cost_val)
 
-    # update weights
-    w1 += del_w1
-    w2 += del_w2
+        # back propagate and update weights
+        l2.backward(y, 0.01)
+        l1.backward(y, l2, 0.01)
 
-
-    print("a2\n",a2[:,0])
-    print("y\n",y[:,0])
+    plt.figure()
+    plt.plot(loss)
+    plt.xlabel("Number of Epochs")
+    plt.ylabel("Cost")
+    plt.title("Training Accuracy vs Epochs")
 
     print("Done!")
+
+    plt.show()
 
     # a_max = np.max(a0, axis=1)
     # a_min = np.min(a0, axis=1)
