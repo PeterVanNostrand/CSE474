@@ -9,6 +9,10 @@ def softmax(z): # computes the softmax of set of activations exp(ak) / sum( exp(
     sum_exp_z = np.sum(exp_z, axis=0) # assumes neurons for one sample are in column
     return exp_z / sum_exp_z
 
+def loss(a, y):
+    cost = np.multiply(y, np.log(a)) # ylog(a)
+    return -np.mean(cost, axis=1) # determine the loss for each of the 10 output neurons
+
 if __name__ == '__main__':
     print("Part 1: Neural Network")
     fashion_path="C:\\Users\peter\Documents\Peter\\7-College\\7-Fall-2019\CSE474\Projects\project2\data\\fashion"
@@ -51,6 +55,20 @@ if __name__ == '__main__':
     z2 = np.dot(w2, a1) + b2
     a2 = softmax(z2)
     
+    # compute gradient descent for output layer
+    del_z2 = a2 - y
+    del_w2 = np.dot(del_z2, a1.T)
+
+    # compute gradient descient for hidden layer
+    del_a1 = np.dot((a2 - y).T, w2).T
+    del_z1 = np.multiply(del_a1, np.multiply(a1, (1-a1)))
+    del_w1 = np.dot(del_z1, a0.T)
+
+    # update weights
+    w1 += del_w1
+    w2 += del_w2
+
+
     print("a2\n",a2[:,0])
     print("y\n",y[:,0])
 
