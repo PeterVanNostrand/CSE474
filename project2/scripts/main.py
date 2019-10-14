@@ -15,11 +15,9 @@ def normalize(matrix):
     return (matrix - col_min)/(col_max-col_min)
 
 def sigmoid(z):
-    z = normalize(z)
     return 1 / (1 + np.exp(-z))
 
 def softmax(z): # computes the softmax of set of activations exp(ak) / sum( exp(aj) )
-    z = normalize(z)
     exp_z = np.exp(z)
     sum_exp_z = np.sum(exp_z, axis=0) # assumes neurons for one sample are in column
     return exp_z / sum_exp_z
@@ -29,11 +27,15 @@ def cost(a, y):
     return -np.mean(loss, axis=1) # determine the loss for each of the 10 output neurons
 
 class layer_input:
-    def __init__(self, x_train):
+    def __init__(self, num_nodes):
         # Layer 0: Input Layer - Activations are pixel values
-        self.n = x_train.shape[1] # number of neurons in 0th layer
+        self.n = num_nodes # number of neurons in 0th layer
+
+    def set_inputs(self, x_train):
         self.a = np.transpose(x_train) # Every column is one sample, every row is a pixel within that sample
-        self.a = self.a / 255 # normalizing inputs from [0-255] to [0-1] for simplicity
+        self.a = normalize(self.a) # normalizing inputs from [0-255] to [0-1] for simplicity
+        # append extra feature of 1 to every sample for biases
+        self.a = np.vstack((self.a, np.ones((1,self.a.shape[1]))))
 
 
 class layer_hidden:  # Layer 1: Hidden Layer - Fully connected
@@ -45,23 +47,26 @@ class layer_hidden:  # Layer 1: Hidden Layer - Fully connected
         # create a 392 row x 784 col random matrix of weights
         self.w = np.random.randn(self.n, self.prev_layer.n)*0.01
         # create a n row x 1 col random matrix of biases (1 bias/neuron)
-        self.b = np.random.randn(self.n, 1)*0.01
+        # self.b = np.random.randn(self.n, 1)*0.01
         
     def forward(self):
         # z = wa0 + b
         # a = sigmoid(z)
 
         # resulting n x ns (each col the output neurons for a sample)
-        self.z = np.dot(self.w, self.prev_layer.a) + self.b
+        self.z = np.dot(self.w, self.prev_layer.a) #+ self.b
+        self.z = normalize(self.z)
         # computes final activation of every neuron in layer 1 same dims as z
         self.a = sigmoid(self.z)
 
-    def backward(self, y, next_layer, lr):
+    def backward(self, y, next_layer):
         # compute gradient descient for hidden layer
         del_a = np.dot((next_layer.a - y).T, next_layer.w).T
         del_z = np.multiply(del_a, np.multiply(self.a, (1-self.a)))
-        del_w = np.dot(del_z, self.prev_layer.a.T)
-        self.w += lr * del_w
+        self.del_w = np.dot(del_z, self.prev_layer.a.T)
+
+    def update(self, lr):
+        self.w += lr * self.del_w
 
 
 class layer_output: # Layer 2: Output Layer - Softmax
@@ -69,19 +74,22 @@ class layer_output: # Layer 2: Output Layer - Softmax
         self.prev_layer = prev_layer
         self.n = num_nodes # 10 output neurons, one per class
         self.w = np.random.randn(self.n, self.prev_layer.n)*0.01
-        self.b = np.random.randn(self.n, 1)*0.01
+        # self.b = np.random.randn(self.n, 1)*0.01
         
     def forward(self):
         # z = 2a1 + b
         # a = softmax(z)
-        self.z = np.dot(self.w, self.prev_layer.a) + self.b
+        self.z = np.dot(self.w, self.prev_layer.a) #+ self.b
+        self.z = normalize(self.z)
         self.a = softmax(self.z)
 
-    def backward(self, y, lr):
+    def backward(self, y):
         # compute gradient descent for output layer
         del_z = self.a - y
-        del_w = np.dot(del_z, self.prev_layer.a.T)
-        self.w += lr * del_w
+        self.del_w = np.dot(del_z, self.prev_layer.a.T)
+
+    def update(self, lr):
+        self.w += lr * self.del_w
 
 
 if __name__ == '__main__':
@@ -103,13 +111,14 @@ if __name__ == '__main__':
     for i in range(0, ns): # set desired output to 1 for correct class, 0 for rest
         y[y_train[i]-1][i] = 1
   
-    l0 = layer_input(x_train)
+    l0 = layer_input(785)
+    l0.set_inputs(x_train)
     l1 = layer_hidden(392, l0)
     l2 = layer_output(10, l1)
 
     loss = []
 
-    for i in range(0, 10):
+    for i in range(0, 30):
         # forwared propagate
         l1.forward()
         l2.forward()
@@ -119,8 +128,19 @@ if __name__ == '__main__':
         loss.append(cost_val)
 
         # back propagate and update weights
-        l2.backward(y, 0.01)
-        l1.backward(y, l2, 0.01)
+        l2.backward(y)
+        l1.backward(y, l2)
+
+        l2.update(0.01)
+        l1.update(0.01)
+
+        # randomly reorder the training data (rebuilding labels to correspond)
+        data = np.hstack((x_train, y_train.reshape(60000, 1)))
+        np.random.shuffle(data)
+        x_train = data[:,:-1]
+        y_train = data[:,-1:].reshape(60000)
+        for i in range(0, ns): # set desired output to 1 for correct class, 0 for rest
+            y[y_train[i]-1][i] = 1
 
     plt.figure()
     plt.plot(loss)
