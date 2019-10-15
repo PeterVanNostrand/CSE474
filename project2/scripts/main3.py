@@ -59,14 +59,14 @@ class layer_hidden:  # Layer 1: Hidden Layer - Fully connected
 
         # resulting n x ns (each col the output neurons for a sample)
         self.z = np.dot(self.w, self.prev_layer.a) #+ self.b
-        self.z = plusMinOne(self.z.T).T # normalize(z)
+        self.z = plusMinOne(self.z) # normalize(z)
         # computes final activation of every neuron in layer 1 same dims as z
         self.a = sigmoid(self.z)
 
     def backward(self, y, next_layer):
         # compute gradient descient for hidden layer
         del_a = np.dot((next_layer.a - y).T, next_layer.w).T
-        del_z = np.multiply(np.multiply(del_a, self.a), (1-self.a))
+        del_z = np.multiply(del_a, np.multiply(self.a, (1-self.a)))
         self.del_w = np.dot(del_z, self.prev_layer.a.T)
 
     def update(self, lr):
@@ -84,7 +84,7 @@ class layer_output: # Layer 2: Output Layer - Softmax
         # z = 2a1 + b
         # a = softmax(z)
         self.z = np.dot(self.w, self.prev_layer.a) #+ self.b
-        self.z = plusMinOne(self.z.T).T #normalize(self.z)
+        self.z = plusMinOne(self.z) #normalize(self.z)
         self.a = softmax(self.z)
 
     def backward(self, y):
@@ -95,6 +95,11 @@ class layer_output: # Layer 2: Output Layer - Softmax
     def update(self, lr):
         self.w -= lr * self.del_w
 
+def scale(z):
+    return 2.*(z - np.min(z))/np.ptp(z)-1
+
+def scale01(z):
+    return (z - np.min(z))/np.ptp(z)
 
 if __name__ == '__main__':
     print("Part 1: Neural Network")
@@ -110,41 +115,56 @@ if __name__ == '__main__':
     
     ns = x_train.shape[0] # number of samples in input
 
-    # Create an array for loss calculation with 1 for correct label, 0 otherwise
-    y = np.zeros((10, ns)) # each column represents the output neurons for one sample
-    for i in range(0, ns): # set desired output to 1 for correct class, 0 for rest
-        y[y_train[i]-1][i] = 1
-  
-    l0 = layer_input(785)
-    l0.set_inputs(x_train)
-    l1 = layer_hidden(392, l0)
-    l2 = layer_output(10, l1)
+    x_train = x_train / 255
 
+    # randomly reorder the training data (rebuilding labels to correspond)
+    # data = np.hstack((x_train, y_train.reshape(60000, 1)))
+    # np.random.shuffle(data)
+    # x_train = data[:,:-1]
+    # y_train = data[:,-1:].reshape(60000)
+
+    ys = np.zeros((ns, 10)) # each column represents the output neurons for one sample
+
+    for i in range(0, ns): # set desired output to 1 for correct class, 0 for rest
+        ys[i][int(y_train[i])] = 1
+
+    n0 = 785
+    n1 = 150
+    n2 = 10
+    
+    w1 = np.random.randn(n1, n0)*0.01
+    w2 = np.random.randn(n2, n1)*0.01
+    lr = 0.01
     loss = []
 
-    for i in range(0, 5):
-        # forwared propagate
-        l1.forward()
-        l2.forward()
+    for i in range (0, ns):
+        a0 = np.append(x_train[i], 1)#.reshape(785,1)
+        y = ys[i]#.reshape((10,1))
+        
+        z1 = np.dot(w1, a0)#.reshape((392,1))
+        # z1 = scale(z1)
+        a1 = sigmoid(z1)#.reshape((392,1))
 
-        # compute cost
-        cost_val = np.mean(cost(l2.a, y))
-        loss.append(cost_val)
+        z2 = np.dot(w2, a1)#.reshape((10,1))
+        # z2 = scale(z2)
+        a2 = softmax(z2)#.reshape((10,1))
 
-        # back propagate and update weights
-        l2.backward(y)
-        l2.update(1)
+        loss.append(np.sum(np.square(a2 - y)))
 
-        l1.backward(y, l2)
-        l1.update(1)
+        dz2 = (a2 - y).reshape((n2,1))
+        # a1 = a1.reshape((392,1))
+        dw2 = np.dot(dz2, a1.reshape(n1,1).T)#.reshape((10,392))
 
-        # randomly reorder the training data (rebuilding labels to correspond)
-        data = np.hstack((x_train, y_train.reshape(60000, 1)))
-        np.random.shuffle(data)
-        x_train = data[:,:-1]
-        y_train = data[:,-1:].reshape(60000)
-        for i in range(0, ns): # set desired output to 1 for correct class, 0 for rest
-            y[y_train[i]-1][i] = 1
+        da1 = np.dot((a2 - y).T, w2)
+        daz1 = np.dot(a1.T, (1-a1))
+        dz1 = np.dot(da1, daz1).reshape((1,n1))
+        dw1 = np.dot(dz1.T, a0.reshape((n0,1)).T)
+
+        w1 -= lr * dw1
+        w2 -= lr * dw2
+
+        print(i," ", loss[i])
+
 
     plt.figure()
     plt.plot(loss)
