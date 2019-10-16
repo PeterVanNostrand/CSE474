@@ -109,7 +109,7 @@ if __name__ == '__main__':
 
     loss = []
 
-    for i in range(0, 10):
+    for i in range(0, 15):
         # forwared propagate
         l1.forward()
         l2.forward()
@@ -123,9 +123,9 @@ if __name__ == '__main__':
         l1.backward(y, l2, 0.01)
 
     plt.figure()
-    plt.plot(loss)
+    plt.plot(loss/max(loss))
     plt.xlabel("Number of Epochs")
-    plt.ylabel("Cost")
+    plt.ylabel("Training Accuracy")
     plt.title("Training Accuracy vs Epochs")
 
     print("Done!")
