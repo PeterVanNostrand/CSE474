@@ -131,10 +131,3 @@ if __name__ == '__main__':
     print("Done!")
 
     plt.show()
-
-    # a_max = np.max(a0, axis=1)
-    # a_min = np.min(a0, axis=1)
-    # x_max = np.max(x_train, axis=1)
-    # x_min = np.min(x_train, axis=1)
-    # print("z1[0]\n",z1[:,0])
-    # print("z1[1]\n",z1[:,1])
