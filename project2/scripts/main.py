@@ -144,7 +144,6 @@ if __name__ == '__main__':
     y = y.T
   
     l0 = layer_input(785)
-    # l0.set_inputs(x_train)
     l1 = layer_hidden(392, l0)
     l2 = layer_output(10, l1)
 
