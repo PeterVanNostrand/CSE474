@@ -42,7 +42,7 @@ def create_model(shape, chanDim, classes):
     # Fully Connected
     model.add(
         k.layers.Dense(
-            512,
+            392,
             activation='relu'
         )
     )
