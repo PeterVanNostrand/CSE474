@@ -1,8 +1,8 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import util_mnist_reader
+from matplotlib import pyplot as plt
+import sklearn
 import keras as k
-
+import numpy as np
+from sklearn.metrics import classification_report
 
 def create_model(shape, chanDim, classes):
     model = k.models.Sequential()
@@ -42,7 +42,7 @@ def create_model(shape, chanDim, classes):
     # Fully Connected
     model.add(
         k.layers.Dense(
-            512,
+            392,
             activation='relu'
         )
     )
@@ -55,94 +55,60 @@ def create_model(shape, chanDim, classes):
         )
     )
 
-    # return the constructed network architecture
-    return model
-
-
-def py_create_model(width, height, depth, classes):
-    # initialize the model along with the input shape to be
-    # "channels last" and the channels dimension itself
-    model = k.models.Sequential()
-    inputShape = (height, width, depth)
-    chanDim = -1
-
-    # first CONV => RELU => CONV => RELU => POOL layer set
-    model.add(k.layers.Conv2D(32, (3, 3), padding="same",
-    input_shape=inputShape))
-    model.add(k.layers.Activation("relu"))
-    model.add(k.layers.BatchNormalization(axis=chanDim))
-    model.add(k.layers.Conv2D(32, (3, 3), padding="same"))
-    model.add(k.layers.Activation("relu"))
-    model.add(k.layers.BatchNormalization(axis=chanDim))
-    model.add(k.layers.MaxPooling2D(pool_size=(2, 2)))
-    model.add(k.layers.Dropout(0.25))
-
-    # second CONV => RELU => CONV => RELU => POOL layer set
-    model.add(k.layers.Conv2D(64, (3, 3), padding="same"))
-    model.add(k.layers.Activation("relu"))
-    model.add(k.layers.BatchNormalization(axis=chanDim))
-    model.add(k.layers.Conv2D(64, (3, 3), padding="same"))
-    model.add(k.layers.Activation("relu"))
-    model.add(k.layers.BatchNormalization(axis=chanDim))
-    model.add(k.layers.MaxPooling2D(pool_size=(2, 2)))
-    model.add(k.layers.Dropout(0.25))
-
-    # first (and only) set of FC => RELU layers
-    model.add(k.layers.Flatten())
-    model.add(k.layers.Dense(512))
-    model.add(k.layers.Activation("relu"))
-    model.add(k.layers.BatchNormalization())
-    model.add(k.layers.Dropout(0.5))
-
-    # softmax classifier
-    model.add(k.layers.Dense(classes))
-    model.add(k.layers.Activation("softmax"))
-
-    # return the constructed network architecture
     return model
 
 if __name__ == '__main__':
-    print("Part 1: Neural Network")
-    fashion_path="C:\\Users\peter\Documents\Peter\\7-College\\7-Fall-2019\CSE474\Projects\project2\data\\fashion"
+    num_epochs = 15
+    lr_start = 0.01
+    batch_n = 24
 
-    # Import datasets
     ((x_train, y_train), (x_test, y_test)) = k.datasets.fashion_mnist.load_data()
 
-    # Normalize inputs to [0,1]
-    x_train = x_train / 255
-    y_train = y_train / 255
+    ns_train = x_train.shape[0]
+    ns_test = x_test.shape[0]
 
-    # Create a CNN model using Keras
-    # model = create_model((28, 28, 1), -1, 10)
-    model = py_create_model(28, 28, 1, 10)
+    x_train = x_train.reshape((ns_train, 28, 28, 1))
+    x_test = x_test.reshape((ns_test, 28, 28, 1))
+    
+    x_train = x_train / 255.0
+    x_test = x_test / 255.0
 
-    # Compile the model, optimizing with SGD
-    learn_rate = 0.01
-    num_epochs = 30
-    batch_size = 32
-    sgd = k.optimizers.SGD(lr=learn_rate, momentum=0.5, decay=learn_rate / num_epochs)
-    # NUM_EPOCHS = 25
-    # INIT_LR = 1e-2
-    # BS = 32
-    # sgd = k.optimizers.SGD(lr=INIT_LR, momentum=0.9, decay=INIT_LR / NUM_EPOCHS)
-    model.compile(
-        optimizer=sgd,
-        loss='categorical_crossentropy',
-        metrics=['accuracy']
-    )
-
-    # reshape data to num_samples x rows x columns x depth
-    x_train = x_train.reshape((x_train.shape[0], 28, 28, 1))
-    x_test = x_test.reshape((x_test.shape[0], 28, 28, 1))
-
-    # Convert labels to one hot
     y_train = k.utils.to_categorical(y_train, num_classes=10)
     y_test = k.utils.to_categorical(y_test, num_classes=10)
 
-    # Train the model
-    H = model.fit(x_train, y_train, validation_data=(x_test, y_test), batch_size=32, epochs=30)
-    # model.fit(x_train, y_train,	validation_data=(x_test, y_test), batch_size=BS, epochs=NUM_EPOCHS)
+    labels = ["top", "trouser", "pullover", "dress", "coat", "sandal", "shirt", "sneaker", "bag", "ankle boot"]
 
-    # Evaluate the model
-    score = model.evaluate(x_test, y_test, batch_size=batch_size)
-    print(score)
+    opt_sgd = k.optimizers.SGD(lr=lr_start, momentum=0.9, decay=lr_start / num_epochs)
+    model = create_model((28, 28, 1), -1, 10)
+    # model = MiniVGGNet.build(width=28, height=28, depth=1, classes=10)
+    model.compile(loss="categorical_crossentropy", optimizer=opt_sgd, metrics=["accuracy"])
+
+    progress = model.fit(
+        x_train,
+        y_train,
+        validation_data=(x_test, y_test),
+        batch_size=batch_n,
+        epochs=num_epochs
+    )
+    p = model.predict(x_test)
+
+    report = classification_report(y_test.argmax(axis=1), p.argmax(axis=1), target_names=labels)
+    print(report)
+
+    train_loss = progress.history["loss"]
+    train_acc = progress.history["acc"]
+    val_loss = progress.history["val_loss"]
+    val_acc = progress.history["val_acc"]
+
+    time = np.arange(num_epochs)
+
+    plt.figure()
+    plt.plot(time, train_loss, label="training loss")
+    plt.plot(time, train_acc, label="training accuracy")
+    plt.plot(time, val_loss, label="validation loss")
+    plt.plot(time, val_acc, label="validation accuracy")
+    plt.title("Accuracy vs Epochs")
+    plt.xlabel("epochs")
+    plt.ylabel("accuracy/loss")
+    plt.legend()
+    plt.show()
