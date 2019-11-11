@@ -60,8 +60,6 @@ def create_autoencoder(shape):
     autoencoder.add(Conv2D(8, (3, 3), activation='relu', padding='same'))
     autoencoder.add(MaxPooling2D((2, 2), padding='same'))
     autoencoder.add(Conv2D(8, (3, 3), strides=(2,2), activation='relu', padding='same'))
-
-    # Flatten encoding forvisualization
     autoencoder.add(Flatten())
     autoencoder.add(Reshape((4, 4, 8)))
 
