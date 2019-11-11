@@ -26,10 +26,16 @@ def evaluate_clusters(k, clusterAssment, labels):
             purity[i] = maxLabelFreq[i] / freqPerClust[i]
 
     accuracy = correctlyAssigned / len(clusterAssment)
-    return accuracy, purity, clustsByLabel
+    ars = metrics.adjusted_rand_score(clusterAssment, labels)
+
+    print("\tAccuracy: ", accuracy)
+    print("\tARS: ", ars)
+    print("\tPurity: ", purity)
+
+    return accuracy, ars, purity, clustsByLabel
 
 if __name__ == '__main__':
-    print("Autoencoder kMeans start")
+    print("kMeans start")
     k = 10 # Number of clusters
     ((x_train, y_train), (x_test, y_test)) = keras.datasets.fashion_mnist.load_data()
     
@@ -39,12 +45,14 @@ if __name__ == '__main__':
     x_test = x_test / 255.0
 
     clusterer = KMeans(n_clusters=k)
-    clusterAssment = clusterer.fit_predict(x_train)
-    # centroids, clusterAssment = kMeans(x_train, 1000, 10)
-    ars = metrics.adjusted_rand_score(y_train, clusterAssment)
-    accuracy, purity, clustsByLabel = evaluate_clusters(k, clusterAssment, y_train)
+    clusterAssmentTrain = clusterer.fit_predict(x_train)
+    clusterAssmentTest = clusterer.predict(x_test)
 
-    print("Accuracy: ", accuracy)
-    print("ARS: ", ars)
-    print("Purity:\n", purity)
     print("Done!")
+
+    print("Training")
+    evaluate_clusters(k, clusterAssmentTrain, y_train)
+    print("Testing")
+    evaluate_clusters(k, clusterAssmentTest, y_train)
+
+    

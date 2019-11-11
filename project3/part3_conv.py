@@ -5,7 +5,7 @@ import copy
 import math
 import random
 from sklearn import metrics
-from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
 from keras.layers import Input, Dense, Conv2D, MaxPooling2D, UpSampling2D, Flatten, Reshape
 from keras import regularizers
 from keras.models import Model, Sequential
@@ -51,75 +51,94 @@ def plot_stats(progress, num_epochs):
     plt.ylabel("Loss")
     plt.legend()
 
-def create_autoencoder(input_dim, encoding_dim):    
-    # Autoencoder
+def create_autoencoder(shape):
     autoencoder = Sequential()
+
     # Encoder Layers
-    autoencoder.add(Dense(4 * encoding_dim, input_shape=(input_dim,), activation='relu'))
-    autoencoder.add(Dense(2 * encoding_dim, activation='relu'))
-    autoencoder.add(Dense(encoding_dim, activation='relu'))
+    autoencoder.add(Conv2D(16, (3, 3), activation='relu', padding='same', input_shape=shape))
+    autoencoder.add(MaxPooling2D((2, 2), padding='same'))
+    autoencoder.add(Conv2D(8, (3, 3), activation='relu', padding='same'))
+    autoencoder.add(MaxPooling2D((2, 2), padding='same'))
+    autoencoder.add(Conv2D(8, (3, 3), strides=(2,2), activation='relu', padding='same'))
+
+    # Flatten encoding forvisualization
+    autoencoder.add(Flatten())
+    autoencoder.add(Reshape((4, 4, 8)))
+
     # Decoder Layers
-    autoencoder.add(Dense(2 * encoding_dim, activation='relu'))
-    autoencoder.add(Dense(4 * encoding_dim, activation='relu'))
-    autoencoder.add(Dense(input_dim, activation='sigmoid'))
-    autoencoder.compile(optimizer='adam', loss='binary_crossentropy')
+    autoencoder.add(Conv2D(8, (3, 3), activation='relu', padding='same'))
+    autoencoder.add(UpSampling2D((2, 2)))
+    autoencoder.add(Conv2D(8, (3, 3), activation='relu', padding='same'))
+    autoencoder.add(UpSampling2D((2, 2)))
+    autoencoder.add(Conv2D(16, (3, 3), activation='relu'))
+    autoencoder.add(UpSampling2D((2, 2)))
+    autoencoder.add(Conv2D(1, (3, 3), activation='sigmoid', padding='same'))
+
     return autoencoder
 
-def extract_encoder(input_dim, autoencoder):
+def extract_encoder(autoencoder):
     # Separate Encoder model
-    input_img = Input(shape=(input_dim,))
-    encoder_layer1 = autoencoder.layers[0]
-    encoder_layer2 = autoencoder.layers[1]
-    encoder_layer3 = autoencoder.layers[2]
-    encoder = Model(input_img, encoder_layer3(encoder_layer2(encoder_layer1(input_img))))
+    encoder = Model(inputs=autoencoder.input, outputs=autoencoder.get_layer('flatten_1').output)
     return encoder
 
 def train_autoencoder(autoencoder, x_train, x_test, ne):
+    autoencoder.compile(optimizer='adam', loss='binary_crossentropy')
     progress = autoencoder.fit(x_train, x_train, epochs=ne, batch_size=256, validation_data=(x_test, x_test))
     return progress
 
 def autoencode(x_train, x_test):
-    # Get info about data
-    input_dim = x_train.shape[1]
+    # Reshape data to 2D for convolutional layers to use
+    x_train = x_train.reshape((len(x_train), 28, 28, 1))
+    x_test = x_test.reshape((len(x_test), 28, 28, 1))
+
     # Genereate an autoencoder model
-    encoding_dim = 32
-    autoencoder = create_autoencoder(input_dim, encoding_dim)
+    print("Creating autoencoder...")
+    shape = x_train.shape[1:]
+    autoencoder = create_autoencoder(shape)
     # Train the model on the trainind data
+    print("Training autoencoder...")
     num_epochs = 50
     progress = train_autoencoder(autoencoder, x_train, x_test, num_epochs)
     # Plot the autoencoder loss over time
     plot_stats(progress, num_epochs)
     # Extract the encoder phase of the autoencoder
-    encoder = extract_encoder(input_dim, autoencoder)
+    encoder = extract_encoder(autoencoder)
     # Use the encoder to compress the inputs to 32 d
+    print("Compressing training images...")
     compressed_train_images = encoder.predict(x_train)
+    print("Compressing test images...")
     compressed_test_images = encoder.predict(x_test)
     
     return compressed_train_images, compressed_test_images
 
 if __name__ == '__main__':
-    print("kMeans start")
+    print("Auto-Encoder with GMM Clustering")
     k = 10 # Number of clusters
+
+    print("Loading dataset...")
     ((x_train, y_train), (x_test, y_test)) = keras.datasets.fashion_mnist.load_data()
-    
     x_train = np.reshape(x_train, (x_train.shape[0], 784))
     x_train = x_train / 255.0
     x_test = np.reshape(x_test, (x_test.shape[0], 784))
     x_test = x_test / 255.0
 
     # Use auto encoder to reduce dimensionality, returns compressed rep of x_train, x_test
-    cx_train, c_xtest = autoencode(x_train, x_test)
+    cx_train, cx_test = autoencode(x_train, x_test)
 
-    # Perform kMeans clustering
-    clusterer = KMeans(n_clusters=k)
-    clusterAssmentTrain = clusterer.fit_predict(cx_train)
-    clusterAssmentTest = clusterer.predict(c_xtest)
+    # Perform GMM clustering
+    print("Training GMM...")
+    gmm = GaussianMixture(n_components=k)
+    gmm.fit(cx_train)
+    print("Clustering training data...")
+    clusterAssmentTrain = gmm.predict(cx_train)
+    print("Clustering test data...")
+    clusterAssmentTest = gmm.predict(cx_test)
+    print("Done!")
 
     # Compute Metrics
-    print("Training")
+    print("Training Metrics:")
     evaluate_clusters(10, clusterAssmentTrain, y_train)
-    print("Testing")
+    print("Testing Metrics:")
     evaluate_clusters(10, clusterAssmentTest, y_test)
 
-    print("Done!")
     plt.show()

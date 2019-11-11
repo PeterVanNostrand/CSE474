@@ -5,7 +5,7 @@ import copy
 import math
 import random
 from sklearn import metrics
-from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
 from keras.layers import Input, Dense, Conv2D, MaxPooling2D, UpSampling2D, Flatten, Reshape
 from keras import regularizers
 from keras.models import Model, Sequential
@@ -82,44 +82,53 @@ def autoencode(x_train, x_test):
     # Get info about data
     input_dim = x_train.shape[1]
     # Genereate an autoencoder model
+    print("Creating autoencoder...")
     encoding_dim = 32
     autoencoder = create_autoencoder(input_dim, encoding_dim)
     # Train the model on the trainind data
+    print("Training autoencoder...")
     num_epochs = 50
     progress = train_autoencoder(autoencoder, x_train, x_test, num_epochs)
     # Plot the autoencoder loss over time
     plot_stats(progress, num_epochs)
     # Extract the encoder phase of the autoencoder
     encoder = extract_encoder(input_dim, autoencoder)
-    # Use the encoder to compress the inputs to 32 d
+    # Use the encoder to compress the inputs to 
+    print("Compressing tranining images...")
     compressed_train_images = encoder.predict(x_train)
+    print("Compressing test images...")
     compressed_test_images = encoder.predict(x_test)
     
     return compressed_train_images, compressed_test_images
 
 if __name__ == '__main__':
-    print("kMeans start")
+    print("Auto-Encoder with GMM Clustering")
     k = 10 # Number of clusters
+
+    print("Loading dataset...")
     ((x_train, y_train), (x_test, y_test)) = keras.datasets.fashion_mnist.load_data()
-    
     x_train = np.reshape(x_train, (x_train.shape[0], 784))
     x_train = x_train / 255.0
     x_test = np.reshape(x_test, (x_test.shape[0], 784))
     x_test = x_test / 255.0
 
     # Use auto encoder to reduce dimensionality, returns compressed rep of x_train, x_test
-    cx_train, c_xtest = autoencode(x_train, x_test)
+    cx_train, cx_test = autoencode(x_train, x_test)
 
-    # Perform kMeans clustering
-    clusterer = KMeans(n_clusters=k)
-    clusterAssmentTrain = clusterer.fit_predict(cx_train)
-    clusterAssmentTest = clusterer.predict(c_xtest)
+    # Perform GMM clustering
+    print("Training GMM...")
+    gmm = GaussianMixture(n_components=k)
+    gmm.fit(cx_train)
+    print("Clustering training data...")
+    clusterAssmentTrain = gmm.predict(cx_train)
+    print("Clustering test data...")
+    clusterAssmentTest = gmm.predict(cx_test)
+    print("Done!")
 
     # Compute Metrics
-    print("Training")
+    print("Training Metrics:")
     evaluate_clusters(10, clusterAssmentTrain, y_train)
-    print("Testing")
+    print("Testing Metrics:")
     evaluate_clusters(10, clusterAssmentTest, y_test)
 
-    print("Done!")
     plt.show()
