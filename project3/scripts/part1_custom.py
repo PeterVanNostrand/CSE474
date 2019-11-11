@@ -76,6 +76,9 @@ def evaluate_clusters(k, clusterAssment, labels):
     return accuracy, purity, clustsByLabel
 
 if __name__ == '__main__':
+    print("-------------------------------------------")
+    print("Please see part1.py for implementaion using sklearns, this is a custom implementation of kmeans done for learning purposes and is not fully tested")
+    print("-------------------------------------------")
     print("kMeans start")
     k = 10 # Number of clusters
     ((x_train, y_train), (x_test, y_test)) = keras.datasets.fashion_mnist.load_data()
