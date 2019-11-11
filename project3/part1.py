@@ -53,6 +53,6 @@ if __name__ == '__main__':
     print("Training")
     evaluate_clusters(k, clusterAssmentTrain, y_train)
     print("Testing")
-    evaluate_clusters(k, clusterAssmentTest, y_train)
+    evaluate_clusters(k, clusterAssmentTest, y_test)
 
     
